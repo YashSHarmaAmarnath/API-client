@@ -9,6 +9,11 @@ struct NewPost {
     user_id: u32,
 }
 
+#[derive(Debug, Serialize)]
+struct UpdatePost {
+    title: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), reqwest::Error> {
     println!("Hello, world!");
@@ -49,6 +54,40 @@ async fn main() -> Result<(), reqwest::Error> {
 
     println!("{:#?}",response);
 
+    // for PUT
+    let url = "http://127.0.0.1:5000/put";
+    let (baseurl,endpoint)  = match url_parser(url){
+        Some(parts)=>parts,
+        None => {
+            println!("Invalid URL");
+            return Ok(());
+        }
+    };
+    let update: Value = put(&client, &endpoint, &baseurl, &UpdatePost {
+            title: "Updated title".into(),
+        },).await?;
+    println!("put: {:#?}",update);
+    
+    // for PATCH
+    let url = "http://127.0.0.1:5000/patch";
+    let (baseurl,endpoint)  = match url_parser(url){
+        Some(parts)=>parts,
+        None => {
+            println!("Invalid URL");
+            return Ok(());
+        }
+    };
+    let patched: Value = patch(&client, &endpoint, &baseurl, &UpdatePost {
+            title: "patched title".into(),
+        },).await?;
+    println!("patch: {:#?}",patched);
+
+    // for DELETE
+    delete(&client, "/delete","http://127.0.0.1:5000/").await?;
+
+    println!("Deleted");
+
+
     Ok(())
 }
 
@@ -71,6 +110,21 @@ where
     let url = format!("{}{}",baseurl,endurl);
 
     client.post(url).json(body).send().await?.error_for_status()?.json::<T>().await
+}
+
+async fn put<T,B>(client: &Client,endpoint: &str,baseurl: &str,body:&B)->Result<T, reqwest::Error> where T: DeserializeOwned, B: Serialize, {
+    let url = format!("{}{}",baseurl,endpoint);
+    client.put(url).json(body).send().await?.error_for_status()?.json::<T>().await
+}
+async fn patch<T,B>(client: &Client,endpoint: &str,baseurl: &str,body:&B)->Result<T, reqwest::Error> where T: DeserializeOwned, B: Serialize, {
+    let url = format!("{}{}",baseurl,endpoint);
+    client.patch(url).json(body).send().await?.error_for_status()?.json::<T>().await
+}
+
+async fn delete(client: &Client,endpoint: &str,baseurl: &str)->Result<(),reqwest::Error>{
+    let url = format!("{}{}",baseurl,endpoint);
+    client.delete(url).send().await?.error_for_status()?;
+    Ok(())
 }
 
 fn url_parser(url:&str)->Option<(String,String)>{

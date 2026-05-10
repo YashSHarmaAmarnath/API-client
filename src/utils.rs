@@ -1,9 +1,52 @@
-use reqwest::{Client};
-use reqwest::header::{HeaderMap};
+// use reqwest::header;
+// use reqwest::{Client};
+use reqwest::{Client,Response, StatusCode, Version, header::HeaderMap};
+// use reqwest::header::{HeaderMap};
 use serde::{Serialize, de::DeserializeOwned};
+// use tokio::io::DuplexStream;
 use std::collections::HashMap;
+use std::time::Instant;
+use std::{error::Error,time::Duration};
 
-pub async fn get<T>(client: &Client, endpoint: &str, baseurl: &str,query: Option<&HashMap<String, String>>,header:Option<HeaderMap> ) -> Result<T, reqwest::Error>
+#[derive(Debug)]
+pub struct ApiResponse<T>{
+    pub status: StatusCode,
+    pub headers: HeaderMap,
+    pub body: T,
+    pub raw_text: String,
+    pub final_url: String,
+    pub content_length: Option<u64>,
+    pub http_version: Version,
+    pub response_time: Duration,
+}
+
+async fn handle_response<T>(
+    response:Response,
+    response_time: Duration
+) -> Result<ApiResponse<T>,Box<dyn Error>>
+where 
+    T: DeserializeOwned,
+{
+    let status = response.status();
+    let headers = response.headers().clone();
+    let final_url = response.url().to_string();
+    let content_length = response.content_length();
+    let http_version = response.version();
+    
+    let raw_text = response.text().await?;
+
+    let body: T = serde_json::from_str(&raw_text)?;
+
+    Ok(ApiResponse { status, headers, body, raw_text, final_url, content_length, http_version, response_time })
+}
+
+pub async fn get<T>(
+    client: &Client,
+    endpoint: &str,
+    baseurl: &str,
+    query: Option<&HashMap<String,String>>,
+    header:Option<HeaderMap> 
+) -> Result<ApiResponse<T>, Box<dyn Error>>
 where
     T: DeserializeOwned,
 {
@@ -15,14 +58,10 @@ where
         request = request.headers(h);
     }
 
-    let data = request
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<T>()
-        .await?;
+    let start = Instant::now();
+    let response   = request.send().await?;
 
-    Ok(data)
+    handle_response(response, start.elapsed()).await
 }
 
 pub async fn post<T, B>(
@@ -32,24 +71,20 @@ pub async fn post<T, B>(
     body: &B,
     query: Option<&HashMap<String, String>>
     ,header:Option<HeaderMap> 
-) -> Result<T, reqwest::Error>
+) -> Result<ApiResponse<T>, Box<dyn Error>>
 where
     T: DeserializeOwned,
     B: Serialize,
 {
     let url = url_builder(baseurl,endpoint,query);
-    let mut request = client.post(url);
+    let mut request = client.post(url).json(body);
 
     if let Some(h) = header{
         request = request.headers(h);
     }
-    request
-        .json(body)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<T>()
-        .await
+    let start = Instant::now();
+    let response = request.send().await?;
+    handle_response(response, start.elapsed()).await
 }
 
 pub async fn put<T, B>(
@@ -59,25 +94,23 @@ pub async fn put<T, B>(
     body: &B,
     query: Option<&HashMap<String, String>>
     ,header:Option<HeaderMap> 
-) -> Result<T, reqwest::Error>
+) -> Result<ApiResponse<T>, Box<dyn Error>>
 where
     T: DeserializeOwned,
     B: Serialize,
 {
     let url = url_builder(baseurl,endpoint,query);
-    let mut request = client.put(url);
+    let mut request = client.put(url).json(body);
 
     if let Some(h) = header{
         request = request.headers(h);
     }
-    request
-        .json(body)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<T>()
-        .await
+    let start = Instant::now();
+    let response = request.send().await?;
+
+    handle_response(response, start.elapsed()).await
 }
+
 pub async fn patch<T, B>(
     client: &Client,
     endpoint: &str,
@@ -85,35 +118,43 @@ pub async fn patch<T, B>(
     body: &B,
     query: Option<&HashMap<String, String>>
     ,header:Option<HeaderMap> 
-) -> Result<T, reqwest::Error>
+) -> Result<ApiResponse<T>, Box<dyn Error>>
 where
     T: DeserializeOwned,
     B: Serialize,
 {
     let url = url_builder(&baseurl,&endpoint,query);
-    let mut request = client.patch(url);
+    let mut request = client.patch(url).json(body);
 
     if let Some(h) = header{
         request = request.headers(h);
     }
-    request
-        .json(body)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<T>()
-        .await
+    let start = Instant::now();
+    let response = request.send().await?;
+    
+    handle_response(response, start.elapsed()).await
 }
 
-pub async fn delete(client: &Client, endpoint: &str, baseurl: &str,query: Option<&HashMap<String, String>>,header:Option<HeaderMap>  ) -> Result<(), reqwest::Error> {
+pub async fn delete<T>(
+    client: &Client, 
+    endpoint: &str, 
+    baseurl: &str,
+    query: Option<&HashMap<String, String>>,
+    header:Option<HeaderMap>
+) -> Result<ApiResponse<T>, Box<dyn Error>>
+where
+    T: DeserializeOwned,
+{
     let url = url_builder(baseurl,endpoint,query);
     let mut request = client.delete(url);
 
     if let Some(h) = header{
         request = request.headers(h);
     }
-    request.send().await?.error_for_status()?;
-    Ok(())
+    let start = Instant::now();
+    let response = request.send().await?.error_for_status()?;
+
+    handle_response(response, start.elapsed()).await
 }
 
 pub fn url_splitter(url: &str) -> Option<(String, String)> {

@@ -1,5 +1,7 @@
 use reqwest::{Client};
 use reqwest::header::{HeaderMap,HeaderValue};
+// use serde::de::Error;
+use std::error::Error;
 use serde::{Serialize,};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -26,7 +28,7 @@ struct UpdatePost {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), reqwest::Error> {
+async fn main() -> Result<(), Box<dyn Error>> {
     let mut query:HashMap<String, String> = HashMap::new();
 
     query.insert("userId".to_string(), "1".to_string());
@@ -56,9 +58,7 @@ async fn main() -> Result<(), reqwest::Error> {
             return Ok(());
         }
     };
-    let data: Value = get(&client, &endpoint, &baseurl,Some(&query),Some(headers),).await?;
-
-    println!("{:#}", data);
+    let response= get::<Value>(&client, &endpoint, &baseurl,Some(&query),Some(headers),).await?;
 
     //for POST
     let url = "http://127.0.0.1:5000/post";
@@ -73,33 +73,22 @@ async fn main() -> Result<(), reqwest::Error> {
         title: "Hello".into(),
         body: "something".into(),
         user_id: 1,
-    };
-
-    let response: Value = post(&client, &endpoint, &baseurl, &new_post,Some(&query),None).await?;
-
-    println!("{:#?}", response);
-
-    // for PUT
+        };
+        
+    let response = post::<Value,_>(&client, &endpoint, &baseurl, &new_post,Some(&query),None).await?;
+        
+    println!("{:#?}", response.body);
+        
+        // for PUT
     let url = "http://127.0.0.1:5000/put";
     let (baseurl, endpoint) = match url_splitter(url) {
         Some(parts) => parts,
-        None => {
-            println!("Invalid URL");
+        None => {println!("Invalid URL");
             return Ok(());
-        }
+            }
     };
-    let update: Value = put(
-        &client,
-        &endpoint,
-        &baseurl,
-        &UpdatePost {
-            title: "Updated title".into(),
-        },
-        Some(&query),
-        None
-    )
-    .await?;
-    println!("put: {:#?}", update);
+    let update = put::<Value,_>(&client,&endpoint,&baseurl,&UpdatePost {title: "Updated title".into(),},Some(&query),None).await?;
+    println!("put: {:#?}", update.body);
 
     // for PATCH
     let url = "http://127.0.0.1:5000/patch";
@@ -110,7 +99,7 @@ async fn main() -> Result<(), reqwest::Error> {
             return Ok(());
         }
     };
-    let patched: Value = patch(
+    let patched = patch::<Value,_>(
         &client,
         &endpoint,
         &baseurl,
@@ -121,12 +110,11 @@ async fn main() -> Result<(), reqwest::Error> {
         None
     )
     .await?;
-    println!("patch: {:#?}", patched);
+    println!("patch: {:#?}", patched.body);
+
 
     // for DELETE
-    delete(&client, "/delete", "http://127.0.0.1:5000/",Some(&query),None).await?;
-
-    println!("Deleted");
+    let response = delete::<Value>(&client, "/delete", "http://127.0.0.1:5000/",Some(&query),None).await?;
 
     Ok(())
 }

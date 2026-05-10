@@ -1,8 +1,17 @@
 use reqwest::{Client};
 use reqwest::header::{HeaderMap,HeaderValue};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Serialize,};
 use serde_json::Value;
 use std::collections::HashMap;
+
+mod utils;
+use utils::get;
+use utils::post;
+use utils::put ;
+use utils::patch ;
+use utils::delete ;
+// use utils::url_builder;
+use utils::url_splitter;
 
 #[derive(Debug, Serialize)]
 struct NewPost {
@@ -38,7 +47,6 @@ async fn main() -> Result<(), reqwest::Error> {
     let client = Client::new();
     // for GET
 
-    // let url = "https://jsonplaceholder.typicode.com/posts/1";
     let url = "http://127.0.0.1:5000/get";
 
     let (baseurl, endpoint) = match url_splitter(url) {
@@ -121,148 +129,4 @@ async fn main() -> Result<(), reqwest::Error> {
     println!("Deleted");
 
     Ok(())
-}
-
-async fn get<T>(client: &Client, endpoint: &str, baseurl: &str,query: Option<&HashMap<String, String>>,header:Option<HeaderMap> ) -> Result<T, reqwest::Error>
-where
-    T: DeserializeOwned,
-{
-    // let url = format!("{}{}", baseurl, endpoint);
-    let url = url_builder(baseurl,endpoint,query);
-
-    let mut request = client.get(url);
-
-    if let Some(h) = header{
-        request = request.headers(h);
-    }
-
-    let data = request
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<T>()
-        .await?;
-
-    Ok(data)
-}
-
-async fn post<T, B>(
-    client: &Client,
-    endpoint: &str,
-    baseurl: &str,
-    body: &B,
-    query: Option<&HashMap<String, String>>
-    ,header:Option<HeaderMap> 
-) -> Result<T, reqwest::Error>
-where
-    T: DeserializeOwned,
-    B: Serialize,
-{
-    // let url = format!("{}{}", baseurl, endpoint);
-    let url = url_builder(baseurl,endpoint,query);
-    let mut request = client.post(url);
-
-    if let Some(h) = header{
-        request = request.headers(h);
-    }
-    request
-        .json(body)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<T>()
-        .await
-}
-
-async fn put<T, B>(
-    client: &Client,
-    endpoint: &str,
-    baseurl: &str,
-    body: &B,
-    query: Option<&HashMap<String, String>>
-    ,header:Option<HeaderMap> 
-) -> Result<T, reqwest::Error>
-where
-    T: DeserializeOwned,
-    B: Serialize,
-{
-    // let url = format!("{}{}", baseurl, endpoint);
-    let url = url_builder(baseurl,endpoint,query);
-    let mut request = client.put(url);
-
-    if let Some(h) = header{
-        request = request.headers(h);
-    }
-    request
-        .json(body)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<T>()
-        .await
-}
-async fn patch<T, B>(
-    client: &Client,
-    endpoint: &str,
-    baseurl: &str,
-    body: &B,
-    query: Option<&HashMap<String, String>>
-    ,header:Option<HeaderMap> 
-) -> Result<T, reqwest::Error>
-where
-    T: DeserializeOwned,
-    B: Serialize,
-{
-    // let url = format!("{}{}", baseurl, endpoint);
-    let url = url_builder(&baseurl,&endpoint,query);
-    let mut request = client.patch(url);
-
-    if let Some(h) = header{
-        request = request.headers(h);
-    }
-    request
-        .json(body)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<T>()
-        .await
-}
-
-async fn delete(client: &Client, endpoint: &str, baseurl: &str,query: Option<&HashMap<String, String>>,header:Option<HeaderMap>  ) -> Result<(), reqwest::Error> {
-    // let url = format!("{}{}", baseurl, endpoint);
-    let url = url_builder(baseurl,endpoint,query);
-    let mut request = client.delete(url);
-
-    if let Some(h) = header{
-        request = request.headers(h);
-    }
-    request.send().await?.error_for_status()?;
-    Ok(())
-}
-
-fn url_splitter(url: &str) -> Option<(String, String)> {
-    let parts: Vec<&str> = url.splitn(4, '/').collect();
-
-    if parts.len() < 3 {
-        return None;
-    }
-
-    let baseurl = format!("{}//{}", parts[0], parts[2]);
-    let endpoint = if parts.len() > 3 {
-        format!("/{}", parts[3])
-    } else {
-        "/".to_string()
-    };
-    Some((baseurl, endpoint))
-}
-
-fn url_builder(baseurl:&str,endpoint: &str,query: Option<&HashMap<String, String>>)->String{
-    let mut url:String = format!("{}{}",baseurl,endpoint);
-    if let Some(query_map)=query{
-        let query_string = query_map.iter().map(|(k,v)|format!("{}={}",k,v)).collect::<Vec<_>>().join("&");
-        url.push('?');
-        url.push_str(&query_string);
-    }
-    url
 }

@@ -1,4 +1,5 @@
-use reqwest::Client;
+use reqwest::{Client};
+use reqwest::header::{HeaderMap,HeaderValue};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -21,6 +22,19 @@ async fn main() -> Result<(), reqwest::Error> {
 
     query.insert("userId".to_string(), "1".to_string());
 
+    let mut headers = HeaderMap::new();
+
+    headers.insert(
+        "Authorization",
+        HeaderValue::from_static("Bearer abc123"),
+    );
+
+    headers.insert(
+        "Accept",
+        HeaderValue::from_static("application/json"),
+    );
+
+
     let client = Client::new();
     // for GET
 
@@ -34,7 +48,7 @@ async fn main() -> Result<(), reqwest::Error> {
             return Ok(());
         }
     };
-    let data: Value = get(&client, &endpoint, &baseurl,Some(&query)).await?;
+    let data: Value = get(&client, &endpoint, &baseurl,Some(&query),Some(headers),).await?;
 
     println!("{:#}", data);
 
@@ -49,11 +63,11 @@ async fn main() -> Result<(), reqwest::Error> {
     };
     let new_post = NewPost {
         title: "Hello".into(),
-        body: "ahfhhhhfhdkd".into(),
+        body: "something".into(),
         user_id: 1,
     };
 
-    let response: Value = post(&client, &endpoint, &baseurl, &new_post,Some(&query)).await?;
+    let response: Value = post(&client, &endpoint, &baseurl, &new_post,Some(&query),None).await?;
 
     println!("{:#?}", response);
 
@@ -73,7 +87,8 @@ async fn main() -> Result<(), reqwest::Error> {
         &UpdatePost {
             title: "Updated title".into(),
         },
-        Some(&query)
+        Some(&query),
+        None
     )
     .await?;
     println!("put: {:#?}", update);
@@ -94,28 +109,34 @@ async fn main() -> Result<(), reqwest::Error> {
         &UpdatePost {
             title: "patched title".into(),
         },
-        Some(&query)
+        Some(&query),
+        None
     )
     .await?;
     println!("patch: {:#?}", patched);
 
     // for DELETE
-    delete(&client, "/delete", "http://127.0.0.1:5000/",Some(&query)).await?;
+    delete(&client, "/delete", "http://127.0.0.1:5000/",Some(&query),None).await?;
 
     println!("Deleted");
 
     Ok(())
 }
 
-async fn get<T>(client: &Client, endpoint: &str, baseurl: &str,query: Option<&HashMap<String, String>> ) -> Result<T, reqwest::Error>
+async fn get<T>(client: &Client, endpoint: &str, baseurl: &str,query: Option<&HashMap<String, String>>,header:Option<HeaderMap> ) -> Result<T, reqwest::Error>
 where
     T: DeserializeOwned,
 {
     // let url = format!("{}{}", baseurl, endpoint);
     let url = url_builder(baseurl,endpoint,query);
 
-    let data = client
-        .get(url)
+    let mut request = client.get(url);
+
+    if let Some(h) = header{
+        request = request.headers(h);
+    }
+
+    let data = request
         .send()
         .await?
         .error_for_status()?
@@ -130,16 +151,21 @@ async fn post<T, B>(
     endpoint: &str,
     baseurl: &str,
     body: &B,
-    query: Option<&HashMap<String, String>>,
+    query: Option<&HashMap<String, String>>
+    ,header:Option<HeaderMap> 
 ) -> Result<T, reqwest::Error>
 where
     T: DeserializeOwned,
     B: Serialize,
 {
-    // let url = format!("{}{}", baseurl, endurl);
+    // let url = format!("{}{}", baseurl, endpoint);
     let url = url_builder(baseurl,endpoint,query);
-    client
-        .post(url)
+    let mut request = client.post(url);
+
+    if let Some(h) = header{
+        request = request.headers(h);
+    }
+    request
         .json(body)
         .send()
         .await?
@@ -153,7 +179,8 @@ async fn put<T, B>(
     endpoint: &str,
     baseurl: &str,
     body: &B,
-    query: Option<&HashMap<String, String>>,
+    query: Option<&HashMap<String, String>>
+    ,header:Option<HeaderMap> 
 ) -> Result<T, reqwest::Error>
 where
     T: DeserializeOwned,
@@ -161,9 +188,12 @@ where
 {
     // let url = format!("{}{}", baseurl, endpoint);
     let url = url_builder(baseurl,endpoint,query);
+    let mut request = client.put(url);
 
-    client
-        .put(url)
+    if let Some(h) = header{
+        request = request.headers(h);
+    }
+    request
         .json(body)
         .send()
         .await?
@@ -176,7 +206,8 @@ async fn patch<T, B>(
     endpoint: &str,
     baseurl: &str,
     body: &B,
-    query: Option<&HashMap<String, String>>,
+    query: Option<&HashMap<String, String>>
+    ,header:Option<HeaderMap> 
 ) -> Result<T, reqwest::Error>
 where
     T: DeserializeOwned,
@@ -184,9 +215,12 @@ where
 {
     // let url = format!("{}{}", baseurl, endpoint);
     let url = url_builder(&baseurl,&endpoint,query);
+    let mut request = client.patch(url);
 
-    client
-        .patch(url)
+    if let Some(h) = header{
+        request = request.headers(h);
+    }
+    request
         .json(body)
         .send()
         .await?
@@ -195,10 +229,15 @@ where
         .await
 }
 
-async fn delete(client: &Client, endpoint: &str, baseurl: &str,query: Option<&HashMap<String, String>>,) -> Result<(), reqwest::Error> {
+async fn delete(client: &Client, endpoint: &str, baseurl: &str,query: Option<&HashMap<String, String>>,header:Option<HeaderMap>  ) -> Result<(), reqwest::Error> {
     // let url = format!("{}{}", baseurl, endpoint);
     let url = url_builder(baseurl,endpoint,query);
-    client.delete(url).send().await?.error_for_status()?;
+    let mut request = client.delete(url);
+
+    if let Some(h) = header{
+        request = request.headers(h);
+    }
+    request.send().await?.error_for_status()?;
     Ok(())
 }
 

@@ -21,6 +21,12 @@ mod utils;
 
 use utils::{delete, get, patch, post, put, url_splitter};
 
+#[derive(PartialEq)]
+enum InputMode {
+    Normal,
+    Insert,
+}
+
 struct App {
     url: String,
     response: String,
@@ -30,6 +36,7 @@ struct App {
     selected_method: usize,
 
     response_scroll: u16,
+    mode: InputMode,
 }
 
 impl Default for App {
@@ -45,6 +52,7 @@ impl Default for App {
 
             selected_method: 0,
             response_scroll: 0,
+            mode: InputMode::Insert,
         }
     }
 }
@@ -233,13 +241,19 @@ fn ui(frame: &mut ratatui::Frame, app: &App) {
 
     frame.render_widget(response, layout[1]);
 
-    let footer = Paragraph::new("q=quit | ↑↓=method | Enter=send | Backspace=delete| jk=response scroll")
-        .style(Style::default().fg(Color::Magenta))
-        .block(
-            Block::default()
-                .title(app.status.as_str())
-                .borders(Borders::ALL),
-        );
+    let mode_text = match  app.mode {
+        InputMode::Insert => "INSERT",
+        InputMode::Normal => "NORMAL",
+    };
+
+    let footer =
+        Paragraph::new(format!("MODE: {} | q=quit | ↑↓=method | Enter=send | i=insert | esc=normal | j/k=response scroll",mode_text))
+            .style(Style::default().fg(Color::Magenta))
+            .block(
+                Block::default()
+                    .title(app.status.as_str())
+                    .borders(Borders::ALL),
+            );
 
     frame.render_widget(footer, layout[2]);
 }
@@ -268,40 +282,54 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     continue;
                 }
 
-                match key.code {
-                    KeyCode::Char('q') => {
-                        break;
-                    }
+                match app.mode {
+                    InputMode::Insert => match key.code {
+                        KeyCode::Esc => {
+                            app.mode = InputMode::Normal;
+                        }
 
-                    
-                    KeyCode::Backspace => {
-                        app.backspace();
-                    }
+                        KeyCode::Backspace => {
+                            app.backspace();
+                        }
 
-                    KeyCode::Up => {
-                        app.prev_method();
-                    }
+                        KeyCode::Enter => {
+                            app.send_request().await;
+                        }
 
-                    KeyCode::Down => {
-                        app.next_method();
-                    }
+                        KeyCode::Char(c) => {
+                            app.input_char(c);
+                        }
 
-                    KeyCode::Char('j') => {
-                        app.scroll_down();
-                    }
+                        _ => {}
+                    },
 
-                    KeyCode::Char('k') => {
-                        app.scroll_up();
-                    }
+                    InputMode::Normal => match key.code {
+                        KeyCode::Char('q') => {
+                            break;
+                        }
 
-                    KeyCode::Enter => {
-                        app.send_request().await;
-                    }
+                        KeyCode::Char('i') => {
+                            app.mode = InputMode::Insert;
+                        }
 
-                    KeyCode::Char(c) => {
-                        app.input_char(c);
-                    }
-                    _ => {}
+                        KeyCode::Char('j') => {
+                            app.scroll_down();
+                        }
+
+                        KeyCode::Char('k') => {
+                            app.scroll_up();
+                        }
+
+                        KeyCode::Up => {
+                            app.prev_method();
+                        }
+
+                        KeyCode::Down => {
+                            app.next_method();
+                        }
+
+                        _ => {}
+                    },
                 }
             }
         }

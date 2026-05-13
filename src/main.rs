@@ -16,11 +16,15 @@ use ratatui::{
 };
 
 use reqwest::Client;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::header::{CONNECTION, HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
 
+use rusqlite::{Connection};
 mod utils;
 use utils::{delete, get, patch, post, put, url_splitter};
+
+mod db_utils;
+use db_utils::{check_database};
 
 // =========================================
 // ENUMS
@@ -592,6 +596,8 @@ fn ui(frame: &mut ratatui::Frame, app: &App) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let conn = Connection::open("data.db")?;
+    let db_status = check_database(&conn);
     enable_raw_mode()?;
 
     let mut stdout = io::stdout();

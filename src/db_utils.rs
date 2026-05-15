@@ -191,3 +191,29 @@ pub fn get_requests_by_collection_id(
 
     requests
 }
+
+pub fn db_delete_collection(
+    conn:&Connection,
+    collection_id: i64
+)->Result<()>
+{    
+    conn.execute("
+        DELETE FROM collections
+        WHERE collection_id = ?1
+    ", [collection_id])?;
+
+    Ok(())
+}
+
+pub fn db_delete_request(
+    conn:&Connection,
+    request_id:i64
+)->Result<()>
+{   
+    conn.execute("
+        delete from api_requests
+        where request_id = ?1
+    ", [request_id])?;
+    
+    Ok(())
+}

@@ -8,13 +8,14 @@ A terminal-based REST client built with Rust, [ratatui](https://github.com/ratat
 
 ## Features
 
+- **Collections** — group requests into named collections with descriptions, persisted in SQLite
 - **All HTTP methods** — GET, POST, PUT, PATCH, DELETE with per-method color coding
 - **Query params editor** — add and edit key/value pairs with row navigation
 - **Headers editor** — set custom request headers inline
 - **Body editor** — write JSON request bodies directly in the TUI
 - **Response viewer** — scrollable, pretty-printed JSON with status, timing, headers, and raw text
-- **Dual-focus input** — switch keyboard focus between the URL bar and editor panel
 - **Vim-inspired modes** — INSERT for editing, NORMAL for navigation
+- **Persistent storage** — collections and requests saved to `data.db` via SQLite
 
 ---
 
@@ -35,79 +36,75 @@ cargo build --release
 
 ### Modes
 
-| Mode   | Enter via       | Purpose                        |
-|--------|-----------------|--------------------------------|
-| INSERT | `i`             | Type in fields, edit content   |
-| NORMAL | `Esc`           | Navigate methods, scroll response |
+| Mode   | Enter via | Purpose                           |
+|--------|-----------|-----------------------------------|
+| INSERT | `i`       | Type in fields, edit content      |
+| NORMAL | `Esc`     | Navigate panels, scroll response  |
 
 ### Keybindings
 
-#### NORMAL mode
+#### NORMAL mode — Navigation
 
-| Key      | Action                        |
-|----------|-------------------------------|
-| `i`      | Enter INSERT mode             |
-| `q`      | Quit                          |
-| `j`      | Scroll response down          |
-| `k`      | Scroll response up            |
-| `↑`      | Select previous HTTP method   |
-| `↓`      | Select next HTTP method       |
+| Key       | Action                          |
+|-----------|---------------------------------|
+| `Tab`     | Cycle focus to next panel       |
+| `Shift+Tab` | Cycle focus to previous panel |
+| `j` / `↓` | Move down / scroll response    |
+| `k` / `↑` | Move up / scroll response      |
+| `i`       | Enter INSERT mode (editor open) |
+| `q`       | Quit                            |
+| `?`       | Toggle help overlay             |
 
-#### INSERT mode — general
+#### NORMAL mode — Collections & Requests panels
 
-| Key      | Action                                  |
-|----------|-----------------------------------------|
-| `Esc`    | Return to NORMAL mode                   |
-| `F2`     | Toggle focus between URL bar and editor |
-| `Tab`    | Switch editor tab (Query/Header/Body)   |
-| `Enter`  | Send the request                        |
+| Key    | Action                                    |
+|--------|-------------------------------------------|
+| `n`    | New collection (when Collections focused) |
+| `n`    | New request (when Requests focused)       |
+| `d`    | Delete selected item (with confirmation)  |
+| `e`    | Open selected request in editor           |
+| `s`    | Send current request                      |
+| `w`    | Save editor changes back to DB            |
 
-#### INSERT mode — URL bar (focus: URL)
+#### INSERT mode — editor
 
-| Key         | Action              |
-|-------------|---------------------|
-| Any char    | Append to URL       |
-| `Backspace` | Delete last char    |
+| Key          | Action                                    |
+|--------------|-------------------------------------------|
+| `Esc`        | Return to NORMAL mode                     |
+| `Tab`        | Cycle editor tab (URL → Query → Headers → Body) |
+| `Ctrl+M`     | Cycle HTTP method                         |
+| `Backspace`  | Delete last character                     |
+| `↓` / `↑`   | Navigate rows (Query / Headers tabs)      |
+| `→` / `←`   | Toggle Key ↔ Value field                  |
+| `Enter`      | Insert newline (Body tab only)            |
 
-#### INSERT mode — Query / Header editor (focus: EDITOR)
+#### New Request / New Collection overlays
 
-| Key         | Action                              |
-|-------------|-------------------------------------|
-| Any char    | Type into active field (key or val) |
-| `Backspace` | Delete last char in active field    |
-| `→` / `←`  | Toggle between Key and Value field  |
-| `↓`         | Move to next row (adds row if last) |
-| `↑`         | Move to previous row                |
-
-#### INSERT mode — Body editor (focus: EDITOR, tab: Body)
-
-| Key         | Action                   |
-|-------------|--------------------------|
-| Any char    | Append to body string    |
-| `Backspace` | Delete last char         |
+| Key    | Action                      |
+|--------|-----------------------------|
+| `Tab`  | Next field                  |
+| `←/→`  | Cycle HTTP method (method field) |
+| `Enter`| Confirm and create          |
+| `Esc`  | Cancel                      |
 
 ---
 
 ## Layout
 
 ```
-┌─────────────┬──────────────────────────────────────┐
-│  Methods    │  URL                                 │
-│  (↑↓)       ├──────────────────────────────────────┤
-├─────────────│  Response                            │
-│  Request    │                                      │
-│  Query│Hdr│Body│                                   │
-│  Editor     │                                      │
-└─────────────┴──────────────────────────────────────┘
-│  Footer: mode · focus · hints · status             │
-└────────────────────────────────────────────────────┘
+┌────────────────┬──────────────────────────────────────┐
+│  Collections   │  Requests                            │  Response
+│  (j/k, n, d)   │  (j/k, n, d, e)                     │  (j/k scroll)
+└────────────────┴──────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  Request Editor                                          │
+│  [METHOD] URL                                            │
+│  URL │ Query │ Headers │ Body                            │
+│  ...                                                     │
+└──────────────────────────────────────────────────────────┘
+│  Footer: mode · panel · keybind hints                    │
+└──────────────────────────────────────────────────────────┘
 ```
-
-- **Left top** — HTTP method list, highlighted with method-specific color
-- **Left bottom** — Tabbed editor for query params, headers, and JSON body
-- **Right top** — URL input bar
-- **Right bottom** — Scrollable response panel
-- **Footer** — Current mode, focus area, contextual keybind hints, and request status
 
 ---
 
@@ -138,22 +135,66 @@ After a request completes, the response panel shows:
 
 ---
 
+## Database
+
+Requests and collections are stored in `data.db` (SQLite) in the project root.
+
+**Schema:**
+
+```
+collections
+  collection_id  INTEGER PRIMARY KEY
+  collection_name TEXT
+  description     TEXT
+  created_at      TIMESTAMP
+
+api_requests
+  request_id     INTEGER PRIMARY KEY
+  collection_id  INTEGER → collections (CASCADE DELETE)
+  request_name   TEXT
+  method         TEXT
+  url            TEXT
+  headers        TEXT  (JSON)
+  body           TEXT  (JSON)
+```
+
+> Deleting a collection cascade-deletes all its requests automatically.
+
+---
+
 ## Project Structure
 
 ```
 src/
-├── main.rs        # App state, UI rendering, event loop
-└── utils.rs       # HTTP helpers (get, post, put, patch, delete, url_splitter)
+├── main.rs      # App state, UI rendering, event loop
+├── db_utils.rs  # SQLite helpers (collections + requests CRUD)
+└── utils.rs     # HTTP helpers (get, post, put, patch, delete)
 ```
 
 ---
 
 ## Dependencies
 
-| Crate        | Purpose                          |
-|--------------|----------------------------------|
-| `ratatui`    | Terminal UI framework            |
-| `crossterm`  | Cross-platform terminal control  |
-| `reqwest`    | Async HTTP client                |
-| `tokio`      | Async runtime                    |
-| `serde_json` | JSON serialization               |
+| Crate        | Purpose                         |
+|--------------|---------------------------------|
+| `ratatui`    | Terminal UI framework           |
+| `crossterm`  | Cross-platform terminal control |
+| `reqwest`    | Async HTTP client               |
+| `tokio`      | Async runtime                   |
+| `rusqlite`   | SQLite database                 |
+| `serde_json` | JSON serialization              |
+| `serde`      | Derive Serialize / Deserialize  |
+
+---
+
+## TODO
+
+- [ ] **Save query params to DB** — `api_requests` has no `query` column yet; add it alongside `headers` and `body` so query params entered in the editor persist across sessions
+- [ ] **Save headers on create** — `add_request()` currently passes `None` for headers; wire the dialog's header input through to `db_insert_api_request`
+- [ ] **Save query params on create** — same as above for query params at creation time
+- [ ] **Save body on create** — same as above for body at creation time
+- [ ] **Update request on edit** — implement `db_update_request()` and call it on `w` keypress so URL, method, headers, query, and body edits persist
+- [ ] **Update collection** — add `db_update_collection()` and an edit overlay so collection name/description can be changed after creation
+- [ ] **Export / import** — dump collections to JSON for sharing or backup
+- [ ] **Environment variables** — support `{{base_url}}` style placeholders in URLs and headers
+- [ ] **Make code modular** - split main file in multiple sub code file 

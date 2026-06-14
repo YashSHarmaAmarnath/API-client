@@ -12,15 +12,15 @@ pub struct Collection {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiRequest {
-    request_id: i64,
-    collection_id: i64,
-    request_name: String,
-    method: String,
-    url: String,
+    pub request_id: i64,
+    pub collection_id: i64,
+    pub request_name: String,
+    pub method: String,
+    pub url: String,
 
-    headers: Option<HashMap<String, String>>,
+    pub headers: Option<HashMap<String, String>>,
 
-    body: Option<serde_json::Value>,
+    pub body: Option<serde_json::Value>,
 }
 
 pub fn check_database(conn:&Connection)->Result<()>{

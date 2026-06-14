@@ -38,20 +38,19 @@ where
 
 pub async fn get<T>(
     client: &Client,
-    endpoint: &str,
-    baseurl: &str,
+    url: &str,
     query: Option<&HashMap<String,String>>,
-    header:Option<HeaderMap> 
+    header:Option<&HeaderMap> 
 ) -> Result<ApiResponse<T>, Box<dyn Error>>
 where
     T: DeserializeOwned,
 {
-    let url = url_builder(baseurl,endpoint,query);
+    let url = url_builder(url,query);
 
     let mut request = client.get(url);
 
     if let Some(h) = header{
-        request = request.headers(h);
+        request = request.headers(h.clone());
     }
 
     let start = Instant::now();
@@ -62,8 +61,7 @@ where
 
 pub async fn post<T, B>(
     client: &Client,
-    endpoint: &str,
-    baseurl: &str,
+    url: &str,
     body: &B,
     query: Option<&HashMap<String, String>>
     ,header:Option<HeaderMap> 
@@ -72,7 +70,7 @@ where
     T: DeserializeOwned,
     B: Serialize,
 {
-    let url = url_builder(baseurl,endpoint,query);
+    let url =  url_builder(url,query);
     let mut request = client.post(url).json(body);
 
     if let Some(h) = header{
@@ -85,8 +83,7 @@ where
 
 pub async fn put<T, B>(
     client: &Client,
-    endpoint: &str,
-    baseurl: &str,
+    url: &str,
     body: &B,
     query: Option<&HashMap<String, String>>
     ,header:Option<HeaderMap> 
@@ -95,7 +92,7 @@ where
     T: DeserializeOwned,
     B: Serialize,
 {
-    let url = url_builder(baseurl,endpoint,query);
+    let url =  url_builder(url,query);
     let mut request = client.put(url).json(body);
 
     if let Some(h) = header{
@@ -109,8 +106,7 @@ where
 
 pub async fn patch<T, B>(
     client: &Client,
-    endpoint: &str,
-    baseurl: &str,
+    url: &str,
     body: &B,
     query: Option<&HashMap<String, String>>
     ,header:Option<HeaderMap> 
@@ -119,7 +115,7 @@ where
     T: DeserializeOwned,
     B: Serialize,
 {
-    let url = url_builder(&baseurl,&endpoint,query);
+    let url = url_builder(url,query);
     let mut request = client.patch(url).json(body);
 
     if let Some(h) = header{
@@ -133,15 +129,14 @@ where
 
 pub async fn delete<T>(
     client: &Client, 
-    endpoint: &str, 
-    baseurl: &str,
+    url: &str,
     query: Option<&HashMap<String, String>>,
     header:Option<HeaderMap>
 ) -> Result<ApiResponse<T>, Box<dyn Error>>
 where
     T: DeserializeOwned,
 {
-    let url = url_builder(baseurl,endpoint,query);
+    let url =  url_builder(url,query);
     let mut request = client.delete(url);
 
     if let Some(h) = header{
@@ -153,24 +148,24 @@ where
     handle_response(response, start.elapsed()).await
 }
 
-pub fn url_splitter(url: &str) -> Option<(String, String)> {
-    let parts: Vec<&str> = url.splitn(4, '/').collect();
+// pub fn url_splitter(url: &str) -> Option<(String, String)> {
+//     let parts: Vec<&str> = url.splitn(4, '/').collect();
 
-    if parts.len() < 3 {
-        return None;
-    }
+//     if parts.len() < 3 {
+//         return None;
+//     }
 
-    let baseurl = format!("{}//{}", parts[0], parts[2]);
-    let endpoint = if parts.len() > 3 {
-        format!("/{}", parts[3])
-    } else {
-        "/".to_string()
-    };
-    Some((baseurl, endpoint))
-}
+//     let baseurl = format!("{}//{}", parts[0], parts[2]);
+//     let endpoint = if parts.len() > 3 {
+//         format!("/{}", parts[3])
+//     } else {
+//         "/".to_string()
+//     };
+//     Some((baseurl, endpoint))
+// }
 
-pub fn url_builder(baseurl:&str,endpoint: &str,query: Option<&HashMap<String, String>>)->String{
-    let mut url:String = format!("{}{}",baseurl,endpoint);
+pub fn url_builder(url: &str,query: Option<&HashMap<String, String>>)->String{
+    let mut url:String = format!("{}",url);
     if let Some(query_map)=query{
         let query_string = query_map.iter().map(|(k,v)|format!("{}={}",k,v)).collect::<Vec<_>>().join("&");
         url.push('?');
